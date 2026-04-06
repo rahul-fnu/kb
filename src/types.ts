@@ -28,10 +28,16 @@ export interface QueryResult {
   confidence: number;
 }
 
+export interface LintIssue {
+  type: "contradiction" | "orphan" | "missing" | "stale" | "uncited";
+  severity: "error" | "warning";
+  page: string;
+  message: string;
+}
+
 export interface LintResult {
   valid: boolean;
-  warnings: string[];
-  errors: string[];
+  issues: LintIssue[];
 }
 
 // ── Manifest types for tracking file hashes ──
@@ -39,6 +45,7 @@ export interface LintResult {
 export interface ManifestEntry {
   filePath: string;
   hash: string;
+  lastCompiledHash: string;
   lastModified: string;
 }
 
@@ -46,4 +53,17 @@ export interface Manifest {
   version: number;
   entries: ManifestEntry[];
   generatedAt: string;
+}
+
+// ── Wiki types ──
+
+export interface WikiPage {
+  name: string;
+  content: string;
+}
+
+// ── Adapter interface ──
+
+export interface KbAdapter {
+  lintWiki(pages: WikiPage[]): Promise<LintResult>;
 }
