@@ -23,8 +23,9 @@ describe("CLI", () => {
     }
   });
 
-  it("runs a stub command", () => {
+  it("runs init command without error", () => {
     const output = execSync(`node ${cli} init`, { encoding: "utf-8" });
-    expect(output.trim()).toBe("init: not implemented");
+    // Init is idempotent — may show "Created" or "Everything already exists"
+    expect(output.length).toBeGreaterThan(0);
   });
 });

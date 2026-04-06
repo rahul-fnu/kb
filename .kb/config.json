@@ -1,0 +1,5 @@
+{
+  "preferredAdapter": "claude",
+  "repoName": "workspace",
+  "queryOutputStyle": "concise"
+}
