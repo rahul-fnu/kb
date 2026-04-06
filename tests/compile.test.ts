@@ -1,64 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, rm, writeFile, mkdir, readFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile, mkdir, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import type { CompileResult } from "../src/types.js";
-import type { KbAdapter } from "../src/adapter/claude.js";
 import {
-  readRawFiles,
-  writeWikiOutput,
-  runCompile,
-} from "../src/commands/compile-logic.js";
+  readExistingWiki,
+  writeWikiPages,
+  regenerateIndex,
+  appendLog,
+} from "../src/utils/wiki.js";
 
-function createMockAdapter(overrides?: Partial<CompileResult>): KbAdapter {
-  return {
-    async compile(rawFiles) {
-      return {
-        success: true,
-        outputPath: "wiki",
-        topicCount: rawFiles.size,
-        errors: [],
-        ...overrides,
-      };
-    },
-    async query() {
-      return { answer: "mock", sources: [], confidence: 1 };
-    },
-    async lint() {
-      return { valid: true, warnings: [], errors: [] };
-    },
-  };
-}
-
-describe("readRawFiles", () => {
-  let tmpDir: string;
-
-  beforeEach(async () => {
-    tmpDir = await mkdtemp(join(tmpdir(), "kb-compile-"));
-  });
-
-  afterEach(async () => {
-    await rm(tmpDir, { recursive: true, force: true });
-  });
-
-  it("reads markdown files from directory", async () => {
-    await writeFile(join(tmpDir, "a.md"), "alpha");
-    await writeFile(join(tmpDir, "b.md"), "beta");
-    await writeFile(join(tmpDir, "c.txt"), "ignored");
-
-    const files = await readRawFiles(tmpDir);
-    expect(files.size).toBe(2);
-    expect(files.get("a.md")).toBe("alpha");
-    expect(files.get("b.md")).toBe("beta");
-  });
-
-  it("returns empty map for nonexistent directory", async () => {
-    const files = await readRawFiles(join(tmpDir, "nope"));
-    expect(files.size).toBe(0);
-  });
-});
-
-describe("writeWikiOutput", () => {
+describe("readExistingWiki", () => {
   let tmpDir: string;
 
   beforeEach(async () => {
@@ -69,99 +20,108 @@ describe("writeWikiOutput", () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it("writes wiki files, INDEX.md, and LOG.md", async () => {
-    const wikiDir = join(tmpDir, "wiki");
-    const output = {
-      files: new Map([
-        ["transformers.md", "# Transformers\nContent here"],
-        ["attention.md", "# Attention\nContent here"],
-      ]),
-      index: "# Index\n- [Transformers](transformers.md)\n- [Attention](attention.md)\n",
-      logEntry: "## 2026-04-06 — Compiled 2 topics",
-    };
-
-    await writeWikiOutput(wikiDir, output);
-
-    const transformers = await readFile(join(wikiDir, "transformers.md"), "utf-8");
-    expect(transformers).toBe("# Transformers\nContent here");
-
-    const attention = await readFile(join(wikiDir, "attention.md"), "utf-8");
-    expect(attention).toBe("# Attention\nContent here");
-
-    const index = await readFile(join(wikiDir, "INDEX.md"), "utf-8");
-    expect(index).toContain("Transformers");
-    expect(index).toContain("Attention");
-
-    const log = await readFile(join(wikiDir, "LOG.md"), "utf-8");
-    expect(log).toContain("Compiled 2 topics");
-  });
-
-  it("appends to existing LOG.md", async () => {
+  it("reads wiki pages and extracts slug/title", async () => {
     const wikiDir = join(tmpDir, "wiki");
     await mkdir(wikiDir, { recursive: true });
-    await writeFile(join(wikiDir, "LOG.md"), "## Previous entry\n");
+    await writeFile(join(wikiDir, "transformers.md"), "# Transformers\n\nContent here");
+    await writeFile(join(wikiDir, "attention.md"), "# Attention Mechanism\n\nMore content");
+    await writeFile(join(wikiDir, "INDEX.md"), "# Index");
+    await writeFile(join(wikiDir, "LOG.md"), "# Log");
 
-    const output = {
-      files: new Map<string, string>(),
-      index: "# Index\n",
-      logEntry: "## New entry",
-    };
+    const pages = await readExistingWiki(tmpDir);
+    expect(pages).toHaveLength(2);
 
-    await writeWikiOutput(wikiDir, output);
+    const slugs = pages.map((p) => p.slug).sort();
+    expect(slugs).toEqual(["attention", "transformers"]);
 
-    const log = await readFile(join(wikiDir, "LOG.md"), "utf-8");
-    expect(log).toContain("Previous entry");
-    expect(log).toContain("New entry");
+    const transformers = pages.find((p) => p.slug === "transformers")!;
+    expect(transformers.title).toBe("Transformers");
+  });
+
+  it("returns empty for nonexistent wiki dir", async () => {
+    const pages = await readExistingWiki(join(tmpDir, "nonexistent"));
+    expect(pages).toEqual([]);
   });
 });
 
-describe("runCompile with mocked adapter", () => {
+describe("writeWikiPages", () => {
   let tmpDir: string;
 
   beforeEach(async () => {
-    tmpDir = await mkdtemp(join(tmpdir(), "kb-run-"));
-    await mkdir(join(tmpDir, "raw"), { recursive: true });
+    tmpDir = await mkdtemp(join(tmpdir(), "kb-write-"));
   });
 
   afterEach(async () => {
     await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it("returns error when raw/ has no markdown files", async () => {
-    const adapter = createMockAdapter();
-    const result = await runCompile(tmpDir, adapter);
-    expect(result.success).toBe(false);
-    expect(result.errors).toContain("No markdown files found in raw/");
+  it("writes wiki page files", async () => {
+    await writeWikiPages(tmpDir, [
+      { slug: "topic-a", title: "Topic A", content: "# Topic A\n\nContent" },
+      { slug: "topic-b", title: "Topic B", content: "# Topic B\n\nMore" },
+    ]);
+
+    const a = await readFile(join(tmpDir, "wiki", "topic-a.md"), "utf-8");
+    expect(a).toContain("# Topic A");
+
+    const b = await readFile(join(tmpDir, "wiki", "topic-b.md"), "utf-8");
+    expect(b).toContain("# Topic B");
+  });
+});
+
+describe("regenerateIndex", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "kb-index-"));
+    await mkdir(join(tmpDir, "wiki"), { recursive: true });
   });
 
-  it("compiles raw files and writes manifest", async () => {
-    await writeFile(join(tmpDir, "raw", "topic.md"), "# Topic\nSome content");
-
-    const adapter = createMockAdapter();
-    const result = await runCompile(tmpDir, adapter);
-
-    expect(result.success).toBe(true);
-    expect(result.topicCount).toBe(1);
-
-    // Manifest should exist
-    const manifestRaw = await readFile(
-      join(tmpDir, ".kb", "manifest.json"),
-      "utf-8"
-    );
-    const manifest = JSON.parse(manifestRaw);
-    expect(manifest.entries).toHaveLength(1);
-    expect(manifest.entries[0].filePath).toBe("topic.md");
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
   });
 
-  it("propagates adapter errors", async () => {
-    await writeFile(join(tmpDir, "raw", "topic.md"), "content");
+  it("generates INDEX.md listing all wiki pages", async () => {
+    await writeFile(join(tmpDir, "wiki", "topic-a.md"), "# Topic A\n\nSummary of A");
+    await writeFile(join(tmpDir, "wiki", "topic-b.md"), "# Topic B\n\nSummary of B");
 
-    const adapter = createMockAdapter({
-      success: false,
-      errors: ["adapter failure"],
-    });
-    const result = await runCompile(tmpDir, adapter);
-    expect(result.success).toBe(false);
-    expect(result.errors).toContain("adapter failure");
+    await regenerateIndex(tmpDir);
+
+    const index = await readFile(join(tmpDir, "wiki", "INDEX.md"), "utf-8");
+    expect(index).toContain("# Wiki Index");
+    expect(index).toContain("[Topic A](topic-a.md)");
+    expect(index).toContain("[Topic B](topic-b.md)");
+  });
+});
+
+describe("appendLog", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "kb-log-"));
+    await mkdir(join(tmpDir, "wiki"), { recursive: true });
+  });
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("appends to LOG.md", async () => {
+    await writeFile(join(tmpDir, "wiki", "LOG.md"), "# Compile Log\n");
+
+    await appendLog(tmpDir, ["raw/test.md"], ["topic-a"], []);
+
+    const log = await readFile(join(tmpDir, "wiki", "LOG.md"), "utf-8");
+    expect(log).toContain("# Compile Log");
+    expect(log).toContain("raw/test.md");
+    expect(log).toContain("topic-a");
+  });
+
+  it("creates LOG.md if it doesn't exist", async () => {
+    await appendLog(tmpDir, ["raw/test.md"], [], ["topic-b"]);
+
+    const log = await readFile(join(tmpDir, "wiki", "LOG.md"), "utf-8");
+    expect(log).toContain("# Compile Log");
+    expect(log).toContain("topic-b");
   });
 });

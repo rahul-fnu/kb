@@ -22,13 +22,9 @@ describe("kb status command", () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it("errors when no manifest exists", () => {
-    try {
-      execSync(`node ${cli} status`, { encoding: "utf-8", cwd: testDir });
-      expect.unreachable("should have thrown");
-    } catch (err: any) {
-      expect(err.stderr || err.stdout).toContain("No manifest found");
-    }
+  it("shows empty status when no manifest exists", () => {
+    const output = execSync(`node ${cli} status`, { encoding: "utf-8", cwd: testDir });
+    expect(output).toContain("No files ingested yet");
   });
 
   it("shows all compiled when hashes match", () => {
@@ -111,7 +107,7 @@ describe("kb status command", () => {
     expect(output).toContain("raw/new-file.txt");
   });
 
-  it("handles empty raw directory", () => {
+  it("handles empty manifest", () => {
     mkdirSync(join(testDir, ".kb"), { recursive: true });
 
     const manifest = {
@@ -122,9 +118,6 @@ describe("kb status command", () => {
     writeFileSync(join(testDir, ".kb", "manifest.json"), JSON.stringify(manifest));
 
     const output = execSync(`node ${cli} status`, { encoding: "utf-8", cwd: testDir });
-    expect(output).toContain("0 total files in raw/");
-    expect(output).toContain("0 compiled");
-    expect(output).toContain("0 pending");
-    expect(output).toContain("0 untracked");
+    expect(output).toContain("No files ingested yet");
   });
 });

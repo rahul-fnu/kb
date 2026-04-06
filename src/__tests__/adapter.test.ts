@@ -8,11 +8,13 @@ describe("LocalAdapter.lintWiki", () => {
   it("returns valid with no issues for a well-formed wiki", async () => {
     const pages: WikiPage[] = [
       {
-        name: "index",
+        slug: "index",
+        title: "Index",
         content: "Welcome to the wiki.\n\n[[topic-a]]\n\n> Source: docs",
       },
       {
-        name: "topic-a",
+        slug: "topic-a",
+        title: "Topic A",
         content: "Topic A content.\n\n[[index]]\n\n> Source: docs",
       },
     ];
@@ -23,8 +25,8 @@ describe("LocalAdapter.lintWiki", () => {
 
   it("detects orphan pages", async () => {
     const pages: WikiPage[] = [
-      { name: "index", content: "Main page\n\n> Source: docs" },
-      { name: "orphan", content: "Nobody links here\n\n> Source: docs" },
+      { slug: "index", title: "Index", content: "Main page\n\n> Source: docs" },
+      { slug: "orphan", title: "Orphan", content: "Nobody links here\n\n> Source: docs" },
     ];
     const result = await adapter.lintWiki(pages);
     const orphans = result.issues.filter((i) => i.type === "orphan");
@@ -35,7 +37,7 @@ describe("LocalAdapter.lintWiki", () => {
 
   it("detects missing linked pages", async () => {
     const pages: WikiPage[] = [
-      { name: "index", content: "See [[nonexistent]]\n\n> Source: docs" },
+      { slug: "index", title: "Index", content: "See [[nonexistent]]\n\n> Source: docs" },
     ];
     const result = await adapter.lintWiki(pages);
     const missing = result.issues.filter((i) => i.type === "missing");
@@ -46,7 +48,7 @@ describe("LocalAdapter.lintWiki", () => {
 
   it("detects uncited pages", async () => {
     const pages: WikiPage[] = [
-      { name: "nocite", content: "Some content without any citations" },
+      { slug: "nocite", title: "No Cite", content: "Some content without any citations" },
     ];
     const result = await adapter.lintWiki(pages);
     const uncited = result.issues.filter((i) => i.type === "uncited");
@@ -56,7 +58,7 @@ describe("LocalAdapter.lintWiki", () => {
 
   it("does not flag pages with citations as uncited", async () => {
     const pages: WikiPage[] = [
-      { name: "cited", content: "Some content\n\n> Source: my-doc.pdf" },
+      { slug: "cited", title: "Cited", content: "Some content\n\n> Source: my-doc.pdf" },
     ];
     const result = await adapter.lintWiki(pages);
     const uncited = result.issues.filter((i) => i.type === "uncited");
@@ -66,11 +68,13 @@ describe("LocalAdapter.lintWiki", () => {
   it("detects contradictions (multiple definitions)", async () => {
     const pages: WikiPage[] = [
       {
-        name: "concept",
+        slug: "concept",
+        title: "Concept",
         content: "# Definition\nA is B\n\n> Source: doc1",
       },
       {
-        name: "Concept",
+        slug: "concept",
+        title: "Concept Alt",
         content: "# Definition\nA is C\n\n> Source: doc2",
       },
     ];

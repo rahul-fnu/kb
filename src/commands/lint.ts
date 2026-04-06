@@ -1,35 +1,22 @@
 import { Command } from "commander";
-import { readdir, readFile, mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { LocalAdapter } from "../adapter/index.js";
-import type { WikiPage } from "../types.js";
+import { readExistingWiki } from "../utils/wiki.js";
 
 export const lintCommand = new Command("lint")
   .description("Lint the knowledge base for errors and warnings")
   .action(async () => {
-    const wikiDir = join(process.cwd(), "wiki");
+    const kbRoot = process.cwd();
 
     // 1. Read all wiki pages
-    let files: string[];
-    try {
-      files = (await readdir(wikiDir)).filter((f) => f.endsWith(".md"));
-    } catch {
-      console.error("No wiki/ directory found. Run `kb compile` first.");
+    const pages = await readExistingWiki(kbRoot);
+
+    if (pages.length === 0) {
+      console.error("No wiki pages found. Run `kb compile` first.");
       process.exitCode = 1;
       return;
     }
-
-    if (files.length === 0) {
-      console.log("No wiki pages found in wiki/");
-      return;
-    }
-
-    const pages: WikiPage[] = await Promise.all(
-      files.map(async (f) => ({
-        name: f.replace(/\.md$/, ""),
-        content: await readFile(join(wikiDir, f), "utf-8"),
-      })),
-    );
 
     // 2. Call adapter.lintWiki()
     const adapter = new LocalAdapter();
@@ -37,7 +24,10 @@ export const lintCommand = new Command("lint")
 
     // 3. Build the report
     const now = new Date();
-    const timestamp = now.toISOString().replace(/:/g, "-").replace(/\.\d+Z$/, "");
+    const timestamp = now
+      .toISOString()
+      .replace(/:/g, "-")
+      .replace(/\.\d+Z$/, "");
     const reportFilename = `${timestamp}-lint.md`;
 
     let report = `# Lint Report\n\n`;
@@ -51,27 +41,29 @@ export const lintCommand = new Command("lint")
     } else {
       report += "## Issues\n\n";
       for (const issue of result.issues) {
-        const icon = issue.severity === "error" ? "❌" : "⚠️";
-        report += `- ${icon} **[${issue.type}]** ${issue.message}\n`;
+        const icon = issue.severity === "error" ? "x" : "!";
+        report += `- [${icon}] **[${issue.type}]** ${issue.message}\n`;
       }
     }
 
     // 4. Save the report
-    const outputsDir = join(process.cwd(), "outputs");
+    const outputsDir = join(kbRoot, "outputs");
     await mkdir(outputsDir, { recursive: true });
     const reportPath = join(outputsDir, reportFilename);
     await writeFile(reportPath, report, "utf-8");
 
-    // 5. Print key findings (top 3-5 issues)
+    // 5. Print key findings
     const errors = result.issues.filter((i) => i.severity === "error");
     const warnings = result.issues.filter((i) => i.severity === "warning");
 
-    console.log(`Lint: ${pages.length} pages scanned, ${result.issues.length} issues found`);
+    console.log(
+      `Lint: ${pages.length} pages scanned, ${result.issues.length} issues found`,
+    );
 
     if (errors.length > 0) {
       console.log(`\nErrors (${errors.length}):`);
       for (const issue of errors.slice(0, 3)) {
-        console.log(`  ✗ [${issue.type}] ${issue.message}`);
+        console.log(`  x [${issue.type}] ${issue.message}`);
       }
       if (errors.length > 3) {
         console.log(`  ... and ${errors.length - 3} more errors`);
@@ -88,7 +80,6 @@ export const lintCommand = new Command("lint")
       }
     }
 
-    // 6. Print path to full report
     console.log(`\nFull report: ${reportPath}`);
 
     if (!result.valid) {

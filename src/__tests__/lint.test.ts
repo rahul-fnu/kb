@@ -18,19 +18,23 @@ describe("kb lint command", () => {
     rmSync(testDir, { recursive: true, force: true });
   });
 
-  it("errors when no wiki/ directory exists", () => {
+  it("errors when no wiki pages exist", () => {
     try {
       execSync(`node ${cli} lint`, { encoding: "utf-8", cwd: testDir });
       expect.unreachable("should have thrown");
     } catch (err: any) {
-      expect(err.stderr || err.stdout).toContain("No wiki/ directory found");
+      expect(err.stderr || err.stdout).toContain("No wiki pages found");
     }
   });
 
   it("reports no issues for empty wiki directory", () => {
     mkdirSync(join(testDir, "wiki"));
-    const output = execSync(`node ${cli} lint`, { encoding: "utf-8", cwd: testDir });
-    expect(output).toContain("No wiki pages found");
+    try {
+      execSync(`node ${cli} lint`, { encoding: "utf-8", cwd: testDir });
+      expect.unreachable("should have thrown");
+    } catch (err: any) {
+      expect(err.stderr || err.stdout).toContain("No wiki pages found");
+    }
   });
 
   it("creates a report file in outputs/", () => {

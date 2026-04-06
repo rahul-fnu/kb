@@ -13,19 +13,29 @@ export const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>;
 
-// ── Adapter result interfaces ──
+// ── Wiki types ──
 
-export interface CompileResult {
-  success: boolean;
-  outputPath: string;
-  topicCount: number;
-  errors: string[];
+export interface WikiPage {
+  slug: string;
+  title: string;
+  content: string;
+}
+
+// ── Adapter input/output types ──
+
+export interface CompileInput {
+  newSources: { filePath: string; content: string }[];
+  existingWiki: WikiPage[];
+  agentInstructions: string;
+}
+
+export interface CompileOutput {
+  pages: WikiPage[];
 }
 
 export interface QueryResult {
   answer: string;
   sources: string[];
-  confidence: number;
 }
 
 export interface LintIssue {
@@ -40,12 +50,20 @@ export interface LintResult {
   issues: LintIssue[];
 }
 
+// ── Adapter interface ──
+
+export interface KBAdapter {
+  compileSources(input: CompileInput): Promise<CompileOutput>;
+  answerQuery(question: string, wikiContent: WikiPage[]): Promise<QueryResult>;
+  lintWiki(wikiContent: WikiPage[]): Promise<LintResult>;
+}
+
 // ── Manifest types for tracking file hashes ──
 
 export interface ManifestEntry {
   filePath: string;
   hash: string;
-  lastCompiledHash: string;
+  lastCompiledHash?: string;
   lastModified: string;
 }
 
@@ -53,17 +71,4 @@ export interface Manifest {
   version: number;
   entries: ManifestEntry[];
   generatedAt: string;
-}
-
-// ── Wiki types ──
-
-export interface WikiPage {
-  name: string;
-  content: string;
-}
-
-// ── Adapter interface ──
-
-export interface KbAdapter {
-  lintWiki(pages: WikiPage[]): Promise<LintResult>;
 }
