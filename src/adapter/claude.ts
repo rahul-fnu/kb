@@ -54,9 +54,17 @@ async function callClaude(prompt: string): Promise<string> {
  * Extract JSON from a response that may contain markdown code fences.
  */
 function extractJSON(text: string): string {
-  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  // Match the outermost code fence — use greedy match to handle
+  // content that might itself contain triple backticks
+  const fenceMatch = text.match(/```(?:json)?\s*\n([\s\S]*)\n```/);
   if (fenceMatch) {
     return fenceMatch[1].trim();
+  }
+  // Try to find a JSON array or object in the text
+  const jsonStart = text.search(/[\[{]/);
+  const jsonEnd = Math.max(text.lastIndexOf("]"), text.lastIndexOf("}"));
+  if (jsonStart !== -1 && jsonEnd > jsonStart) {
+    return text.slice(jsonStart, jsonEnd + 1);
   }
   return text.trim();
 }

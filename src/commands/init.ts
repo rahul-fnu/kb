@@ -59,7 +59,7 @@ export const initCommand = new Command("init")
       },
       {
         path: join(".kb", "manifest.json"),
-        content: "{}\n",
+        content: JSON.stringify({ version: 1, entries: [], generatedAt: new Date().toISOString() }, null, 2) + "\n",
         isDir: false,
       },
       {

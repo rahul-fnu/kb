@@ -53,11 +53,11 @@ describe("kb init", () => {
     expect(config.preferredAdapter).toBe("claude");
     expect(config.queryOutputStyle).toBe("concise");
 
-    const manifest = await readFile(
-      join(tmpDir, ".kb", "manifest.json"),
-      "utf-8"
+    const manifest = JSON.parse(
+      await readFile(join(tmpDir, ".kb", "manifest.json"), "utf-8")
     );
-    expect(manifest.trim()).toBe("{}");
+    expect(manifest.version).toBe(1);
+    expect(manifest.entries).toEqual([]);
 
     const index = await readFile(join(tmpDir, "wiki", "INDEX.md"), "utf-8");
     expect(index).toContain("# Knowledge Base Index");

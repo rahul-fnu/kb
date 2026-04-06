@@ -28,7 +28,12 @@ export function createEmptyManifest(): Manifest {
 export async function readManifest(filePath: string): Promise<Manifest> {
   try {
     const content = await readFile(filePath, "utf-8");
-    return JSON.parse(content) as Manifest;
+    const parsed = JSON.parse(content);
+    // Handle bare `{}` or missing fields from older init
+    if (!parsed.entries || !Array.isArray(parsed.entries)) {
+      return createEmptyManifest();
+    }
+    return parsed as Manifest;
   } catch {
     return createEmptyManifest();
   }
