@@ -3,4 +3,4 @@ dist/
 build/
 *.tgz
 .env
-.pnpm*
+.pnpm*/
