@@ -40,6 +40,25 @@ export interface ManifestEntry {
   filePath: string;
   hash: string;
   lastModified: string;
+  lastCompiledHash?: string;
+}
+
+// ── Adapter interfaces ──
+
+export interface WikiPage {
+  slug: string;
+  title: string;
+  content: string;
+}
+
+export interface CompileInput {
+  newSources: { filePath: string; content: string }[];
+  existingWiki: WikiPage[];
+  agentInstructions: string;
+}
+
+export interface CompileOutput {
+  pages: WikiPage[];
 }
 
 export interface Manifest {
